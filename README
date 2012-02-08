@@ -1,0 +1,17 @@
+== redis-wireshark ==
+
+=== Motivation ===
+
+To watch the network activity associated with Redis using the popular tool Wireshark (formerly Ethereal).
+
+=== Usage ===
+
+To use this, copy redis-wireshark.lua to any filename you like under ~/.wireshark/plugins/.
+Then when you run Wireshark it will understand TCP communications on port 6379 as Redis messages,
+and will know how to interpret them.  It also works with the command-line program tshark.
+
+=== Notes ===
+
+Depending on your system configuration, you may need to be root to capture live traffic.
+Since running plugins as root is not necessarily a great idea, try capturing some data to a PCAP file,
+then load it with the plugin after running Wireshark as an unprivileged user.
