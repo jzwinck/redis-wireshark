@@ -13,11 +13,11 @@ do -- scope
         pinfo.cols.protocol = 'Redis'
 
         mtypes = {
-            ['+'] = 'status',
-            ['-'] = 'error',
-            [':'] = 'integer',
-            ['$'] = 'bulk',
-            ['*'] = 'multi-bulk',
+            ['+'] = 'Status',
+            ['-'] = 'Error',
+            [':'] = 'Integer',
+            ['$'] = 'Bulk',
+            ['*'] = 'Multi-Bulk',
         }
 
         local CRLF = 2 -- constant length of \r\n
@@ -56,7 +56,7 @@ do -- scope
                 end
 
                 local child = parent:add(proto, buffer(offset, length + CRLF + bytes),
-                                         'Redis '..mtype..' message')
+                                         'Redis '..mtype..' Reply')
                 offset = offset + length + CRLF
 
                 -- recurse down for each message contained in this multi-bulk message
@@ -66,19 +66,29 @@ do -- scope
 
             elseif prefix == '$' then -- bulk, contains one binary string
                 local bytes = tonumber(text)
-                local child = parent:add(proto, buffer(offset, length + CRLF + bytes + CRLF),
-                                         'Redis '..mtype..' message')
-                offset = offset + length + CRLF
+                
+                if bytes == -1 then
+                    local child = parent:add(proto, buffer(offset, length + CRLF),
+                                             'Redis '..mtype..' Reply')
 
-                -- get the string contained within this bulk message
-                local line = matches()
-                local length = line:len()
-                child:add(f.value, buffer(offset, length))
-                offset = offset + length + CRLF
+                    offset = offset + length + CRLF
 
+                    child:add(f.value, '<null>')
+                else
+                    local child = parent:add(proto, buffer(offset, length + CRLF + bytes + CRLF),
+                                             'Redis '..mtype..' Reply')
+
+                    offset = offset + length + CRLF
+
+                    -- get the string contained within this bulk message
+                    local line = matches()
+                    local length = line:len()
+                    child:add(f.value, buffer(offset, length))
+                    offset = offset + length + CRLF
+                end
             else -- integer, status or error
                 local child = parent:add(proto, buffer(offset, length + CRLF),
-                                         'Redis '..mtype..' message')
+                                         'Redis '..mtype..' Reply')
                 child:add(f.value, buffer(offset + prefix:len(), length - prefix:len()))
                 offset = offset + length + CRLF
 
