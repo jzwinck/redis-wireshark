@@ -8,6 +8,7 @@ do -- scope
     local f = proto.fields
     -- we could make more of these, e.g. to distinguish keys from values
     f.value   = ProtoField.string('redis.value',   'Value')
+    f.size   = ProtoField.string('redis.value_size',   'Value Size')
 
     function proto.dissector(buffer, pinfo, tree)
         pinfo.cols.protocol = 'Redis'
@@ -46,17 +47,8 @@ do -- scope
                 local bytes = 0
                 local remainder = buffer():string():sub(offset + length + CRLF)
                 local submatches = remainder:gmatch('[^\r\n]+')
-                local replies_left = replies
-                while replies_left > 0 do
-                    local submatch = submatches()
-                    if submatch:sub(1,1) ~= '$' then -- bulk messages contain an extra CRLF
-                        replies_left = replies_left - 1
-                    end
-                    bytes = bytes + submatch:len() + CRLF
-                end
 
-                local child = parent:add(proto, buffer(offset, length + CRLF + bytes),
-                                         'Redis '..mtype..' Reply')
+                local child = parent:add(proto, 'Redis '..mtype..' Reply')
                 offset = offset + length + CRLF
 
                 -- recurse down for each message contained in this multi-bulk message
@@ -82,8 +74,8 @@ do -- scope
 
                     -- get the string contained within this bulk message
                     local line = matches()
-                    local length = line:len()
-                    child:add(f.value, buffer(offset, length))
+                    local length = bytes
+                    child:add(f.value, buffer(offset, bytes))
                     offset = offset + length + CRLF
                 end
             else -- integer, status or error
@@ -105,7 +97,7 @@ do -- scope
         end
 
         -- check that we consumed exactly the right number of bytes
-        assert(offset == buffer():len(), 'consumed '..offset..' bytes of '..buffer():len())
+--        assert(offset == buffer():len(), 'consumed '..offset..' bytes of '..buffer():len())
     end
 
     -- register this dissector for the standard Redis ports
