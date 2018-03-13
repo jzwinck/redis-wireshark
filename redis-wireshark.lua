@@ -73,7 +73,7 @@ do -- scope
                     offset = offset + length + CRLF
 
                     -- get the string contained within this bulk message
-                    local line = matches()
+--                    local line = matches()
                     local length = bytes
                     child:add(f.value, buffer(offset, bytes))
                     offset = offset + length + CRLF
