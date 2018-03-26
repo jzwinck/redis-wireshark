@@ -73,7 +73,6 @@ do -- scope
                     offset = offset + length + CRLF
 
                     -- get the string contained within this bulk message
---                    local line = matches()
                     local length = bytes
                     child:add(f.value, buffer(offset, bytes))
                     offset = offset + length + CRLF
@@ -97,7 +96,7 @@ do -- scope
         end
 
         -- check that we consumed exactly the right number of bytes
---        assert(offset == buffer():len(), 'consumed '..offset..' bytes of '..buffer():len())
+        assert(offset == buffer():len(), 'consumed '..offset..' bytes of '..buffer():len())
     end
 
     -- register this dissector for the standard Redis ports
