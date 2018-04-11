@@ -39,6 +39,11 @@ do -- scope
             local prefix, text = line:match('([-+:$*])(.+)')
             local mtype = mtypes[prefix]
 
+            if not prefix or not text  then
+                pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                return -1
+            end
+
             assert(prefix and text, 'unrecognized line: '..line)
             assert(mtype, 'unrecognized message type: '..prefix)
 
@@ -56,6 +61,10 @@ do -- scope
                 -- recurse down for each message contained in this multi-bulk message
                 for ii = 1, replies do
                     offset = recurse(child, buffer, offset)
+                    if offset == -1 then
+                        pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                        return -1
+                    end
                 end
                 child:set_len(offset - old_offset)
 
@@ -70,6 +79,10 @@ do -- scope
 
                     child:add(f.value, '<null>')
                 else
+                    if(buffer:len() < offset + length + CRLF + bytes + CRLF) then
+                        pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                        return -1
+                    end
 
                     local child = parent:add(proto, buffer(offset, length + CRLF + bytes + CRLF),
                                              'Redis '..mtype..' Reply')
@@ -97,6 +110,10 @@ do -- scope
         local offset = 0
         while offset < buffer():len() do
             offset = recurse(tree, buffer, offset)
+            if offset < 0 then
+                pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                return
+            end
         end
 
         -- check that we consumed exactly the right number of bytes
