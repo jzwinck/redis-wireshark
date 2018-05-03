@@ -49,11 +49,9 @@ do -- scope
 
             if prefix == '*' then -- multi-bulk, contains multiple sub-messages
                 local replies = tonumber(text)
-
                 local old_offset = offset
 
                 local child = parent:add(proto, buffer(offset, 1), 'Redis '..mtype..' Reply')
-
                 child:add(f.bulk_reply_num, buffer(offset + 1, length - 1))
 
                 offset = offset + length + CRLF
@@ -94,13 +92,13 @@ do -- scope
                     -- get the string contained within this bulk message
                     child:add(f.value, buffer(offset, bytes))
                     offset = offset + bytes + CRLF
+
                 end
             else -- integer, status or error
                 local child = parent:add(proto, buffer(offset, length + CRLF),
                                          'Redis '..mtype..' Reply')
                 child:add(f.value, buffer(offset + prefix:len(), length - prefix:len()))
                 offset = offset + length + CRLF
-
             end
 
             return offset
@@ -117,7 +115,7 @@ do -- scope
         end
 
         -- check that we consumed exactly the right number of bytes
-        assert(offset == buffer():len(), 'consumed '..offset..' bytes of '..buffer():len())
+--        assert(offset == buffer():len(), 'consumed '..offset..' bytes of '..buffer():len())
     end
 
     -- register this dissector for the standard Redis ports
