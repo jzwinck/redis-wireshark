@@ -7,6 +7,7 @@ do -- scope
 
     local f = proto.fields
     -- we could make more of these, e.g. to distinguish keys from values
+    f.bulk_reply_num   = ProtoField.string('redis.bulk_reply_num',   'bulk_reply_num')
     f.value   = ProtoField.string('redis.value',   'Value')
     f.size   = ProtoField.string('redis.value_size',   'Value Size')
 
@@ -23,38 +24,47 @@ do -- scope
 
         local CRLF = 2 -- constant length of \r\n
 
+        local function matches(buffer, match_offset)
+            return buffer(match_offset):string():match('[^\r\n]+')
+        end
         -- recursively parse and generate a tree of data from messages in a packet
         -- parent: the tree root to populate under
         -- buffer: the entire packet buffer
         -- offset: the current offset in the buffer
-        -- matches: a one-pass generator function which yields parsed lines from the packet
         -- returns: the new offset (i.e. the input offset plus the number of bytes consumed)
-        local function recurse(parent, buffer, offset, matches)
-            local line = matches() -- get next line
+        local function recurse(parent, buffer, offset)
+            local line = matches(buffer, offset) -- get next line
             local length = line:len()
+
             local prefix, text = line:match('([-+:$*])(.+)')
             local mtype = mtypes[prefix]
+
+            if not prefix or not text  then
+                pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                return -1
+            end
 
             assert(prefix and text, 'unrecognized line: '..line)
             assert(mtype, 'unrecognized message type: '..prefix)
 
             if prefix == '*' then -- multi-bulk, contains multiple sub-messages
                 local replies = tonumber(text)
+                local old_offset = offset
 
-                -- this is a bit gross: we parse (part of) the buffer again to
-                -- calculate the length of the entire multi-bulk message
-                -- if we don't do this, Wireshark will highlight only our prologue
-                local bytes = 0
-                local remainder = buffer():string():sub(offset + length + CRLF)
-                local submatches = remainder:gmatch('[^\r\n]+')
+                local child = parent:add(proto, buffer(offset, 1), 'Redis '..mtype..' Reply')
+                child:add(f.bulk_reply_num, buffer(offset + 1, length - 1))
 
-                local child = parent:add(proto, 'Redis '..mtype..' Reply')
                 offset = offset + length + CRLF
 
                 -- recurse down for each message contained in this multi-bulk message
                 for ii = 1, replies do
-                    offset = recurse(child, buffer, offset, matches)
+                    offset = recurse(child, buffer, offset)
+                    if offset == -1 then
+                        pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                        return -1
+                    end
                 end
+                child:set_len(offset - old_offset)
 
             elseif prefix == '$' then -- bulk, contains one binary string
                 local bytes = tonumber(text)
@@ -67,33 +77,41 @@ do -- scope
 
                     child:add(f.value, '<null>')
                 else
+                    if(buffer:len() < offset + length + CRLF + bytes + CRLF) then
+                        pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                        return -1
+                    end
+
                     local child = parent:add(proto, buffer(offset, length + CRLF + bytes + CRLF),
                                              'Redis '..mtype..' Reply')
+                    -- add size
+                    child:add(f.size, buffer(offset + 1, length - 1))
 
                     offset = offset + length + CRLF
 
                     -- get the string contained within this bulk message
---                    local line = matches()
-                    local length = bytes
                     child:add(f.value, buffer(offset, bytes))
-                    offset = offset + length + CRLF
+                    offset = offset + bytes + CRLF
+
                 end
             else -- integer, status or error
                 local child = parent:add(proto, buffer(offset, length + CRLF),
                                          'Redis '..mtype..' Reply')
                 child:add(f.value, buffer(offset + prefix:len(), length - prefix:len()))
                 offset = offset + length + CRLF
-
             end
 
             return offset
         end
 
         -- parse top-level messages until the buffer is exhausted
-        local matches = buffer():string():gmatch('[^\r\n]+')
         local offset = 0
         while offset < buffer():len() do
-            offset = recurse(tree, buffer, offset, matches)
+            offset = recurse(tree, buffer, offset)
+            if offset < 0 then
+                pinfo.desegment_len = DESEGMENT_ONE_MORE_SEGMENT
+                return
+            end
         end
 
         -- check that we consumed exactly the right number of bytes
