@@ -36,7 +36,7 @@ do -- scope
             local line = matches(buffer, offset) -- get next line
             local length = line:len()
 
-            local prefix, text = line:match('([-+:$*])(.+)')
+            local prefix, text = line:match('^([-+:$*])(.+)')
             local mtype = mtypes[prefix]
 
             if not prefix or not text  then
