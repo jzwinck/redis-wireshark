@@ -10,6 +10,13 @@ To use this, copy redis-wireshark.lua to any filename you like under [https://ww
 Then when you run Wireshark it will understand TCP communications on port 6379 as Redis messages,
 and will know how to interpret them.  It also works with the command-line program tshark.
 
+=== Install it ===
+
+$ sudo su 
+
+$ mkdir -p  ~/.local/lib/wireshark/plugins && cd ~/.local/lib/wireshark/plugins && curl -O https://raw.githubusercontent.com/jzwinck/redis-wireshark/master/redis-wireshark.lua
+
+
 === Notes ===
 
 Depending on your system configuration, you may need to be root to capture live traffic.
